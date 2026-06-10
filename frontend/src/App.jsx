@@ -1,0 +1,297 @@
+import { useEffect, useState, useCallback } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import Sidebar from './components/Sidebar'
+import ChatBox from './components/ChatBox'
+import LyricsPanel from './components/LyricsPanel'
+import Player from './components/Player'
+import GenerationProgress from './components/GenerationProgress'
+import AuthModal from './components/AuthModal'
+import useStore from './store/useStore'
+import { auth, threads as threadsApi, songs as songsApi, anon, chat } from './lib/api'
+import { Disc3, Sparkles } from 'lucide-react'
+import LandingPage from './components/LandingPage'
+
+const queryClient = new QueryClient()
+
+function App() {
+  const {
+    user, token, setUser, setToken,
+    showAuthModal, openAuthModal,
+    threads, setThreads, activeThread, setActiveThread, upsertThread,
+    messages, setMessages, clearMessages,
+    currentLyrics, setCurrentLyrics,
+    generationStatus, generationMessage, setGenerationStatus,
+    currentSong, setCurrentSong,
+  } = useStore()
+
+  const [stage, setStage] = useState('gathering')
+  const [anonThreadId, setAnonThreadId] = useState(null)
+  const [pollInterval, setPollInterval] = useState(null)
+
+  useEffect(() => {
+    if (token && !user) {
+      auth.me().then(r => setUser(r.data)).catch(() => {
+        localStorage.removeItem('token')
+        setToken(null)
+      })
+    }
+  }, [token])
+
+  useEffect(() => {
+    if (user) {
+      threadsApi.list().then(r => setThreads(r.data)).catch(console.error)
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (!user && !anonThreadId) {
+      anon.createSession().then(r => setAnonThreadId(r.data.thread_id)).catch(console.error)
+    }
+  }, [user])
+
+  const activeThreadId = activeThread?.id || anonThreadId
+
+  const startPolling = useCallback((threadId) => {
+    const id = setInterval(async () => {
+      try {
+        const r = await songsApi.status(threadId)
+        const { status, message, song_id } = r.data
+        setGenerationStatus(status, message || '')
+        if (status === 'done') {
+          clearInterval(id)
+          setPollInterval(null)
+          threadsApi.get(threadId).then(r => {
+            const t = r.data
+            setActiveThread(t)
+            upsertThread(t)
+            if (t.song) setCurrentSong(t.song)
+          })
+        } else if (status === 'failed') {
+          clearInterval(id)
+          setPollInterval(null)
+        }
+      } catch {}
+    }, 2000)
+    setPollInterval(id)
+  }, [])
+
+  useEffect(() => () => { if (pollInterval) clearInterval(pollInterval) }, [pollInterval])
+
+  const handleNewThread = async () => {
+    try {
+      const r = await threadsApi.create()
+      const thread = r.data
+      setActiveThread(thread)
+      upsertThread(thread)
+      clearMessages()
+      setCurrentLyrics(null)
+      setCurrentSong(null)
+      setGenerationStatus(null)
+      setStage('gathering')
+    } catch (err) { console.error(err) }
+  }
+
+  const handleSelectThread = async (threadId) => {
+    try {
+      const r = await threadsApi.get(threadId)
+      const t = r.data
+      setActiveThread(t)
+      setStage(t.status)
+      setCurrentLyrics(t.lyrics || null)
+      setCurrentSong(t.song || null)
+      setGenerationStatus(null)
+      setMessages((t.chat_history || []).map(m => ({ role: m.role, content: m.content })))
+    } catch (err) { console.error(err) }
+  }
+
+  const handleGenerate = async () => {
+    const threadId = activeThread?.id || anonThreadId
+    if (!threadId) return
+    if (!user) {
+      openAuthModal(() => handleGenerate())
+      return
+    }
+    try {
+      setGenerationStatus('queued', 'Queued...')
+      await songsApi.generate(threadId)
+      startPolling(threadId)
+    } catch (err) {
+      const detail = err.response?.data?.detail
+      const msg = typeof detail === 'object' ? detail?.message : detail
+      setGenerationStatus('failed', msg || 'Generation failed')
+    }
+  }
+
+  const handleLyrics = (lyrics) => {
+    setCurrentLyrics(lyrics)
+    if (activeThread) {
+      const updated = { ...activeThread, lyrics }
+      setActiveThread(updated)
+      upsertThread(updated)
+    }
+  }
+
+  const handleRevised = (lyrics) => {
+    setCurrentLyrics(lyrics)
+    if (activeThread) {
+      const updated = { ...activeThread, lyrics }
+      setActiveThread(updated)
+      upsertThread(updated)
+    }
+  }
+
+  const [approving, setApproving] = useState(false)
+  const [approveError, setApproveError] = useState('')
+
+  const handleApprove = async () => {
+    const threadId = activeThread?.id || anonThreadId
+    if (!threadId) {
+      setApproveError('No active session — please refresh and try again.')
+      return
+    }
+    setApproving(true)
+    setApproveError('')
+    try {
+      const res = await chat.send(threadId, "Looks good, let's go")
+      const { stage: newStage } = res.data
+      if (newStage) {
+        handleStageChange(newStage)
+        // Reload thread to get updated chat history
+        const threadRes = await threadsApi.get(threadId)
+        const t = threadRes.data
+        setMessages((t.chat_history || []).map(m => ({ role: m.role, content: m.content })))
+      }
+    } catch (err) {
+      const msg = err.response?.data?.detail || err.message || 'Something went wrong'
+      setApproveError(typeof msg === 'string' ? msg : JSON.stringify(msg))
+    } finally {
+      setApproving(false)
+    }
+  }
+
+  const handleStyleSelect = async (styleValue) => {
+    const threadId = activeThread?.id || anonThreadId
+    if (!threadId) return
+    try {
+      const res = await chat.send(threadId, styleValue)
+      const { stage: newStage } = res.data
+      if (newStage) {
+        handleStageChange(newStage)
+        const threadRes = await threadsApi.get(threadId)
+        const t = threadRes.data
+        setMessages((t.chat_history || []).map(m => ({ role: m.role, content: m.content })))
+      }
+    } catch (err) {
+      console.error('Style select error:', err)
+    }
+  }
+
+  const handleStageChange = (newStage) => {
+    setStage(newStage)
+    if (activeThread) {
+      const updated = { ...activeThread, status: newStage }
+      setActiveThread(updated)
+      upsertThread(updated)
+    }
+  }
+
+  const showLyrics   = !!currentLyrics
+  const showPlayer   = currentSong && generationStatus === 'done'
+  const showProgress = generationStatus && !['done', null].includes(generationStatus)
+
+  const showLanding = !user && messages.length === 0
+
+  if (showLanding) {
+    return (
+      <div className="h-screen bg-base overflow-hidden">
+        {showAuthModal && <AuthModal />}
+        <LandingPage onStart={() => {
+          // scroll chat into view — just focus the input
+          document.querySelector('textarea')?.focus()
+          // Force show chat by creating an anon session if needed
+          setMessages([{ role: 'assistant', content: "Hey! Tell me about the story or moment you want to turn into a song. It can be about anyone — a person you love, a memory, a milestone. The more specific, the better the song. 🎵" }])
+        }} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-screen bg-base overflow-hidden">
+      {user && <Sidebar onSelectThread={handleSelectThread} onNewThread={handleNewThread} />}
+
+      <div className="flex-1 flex overflow-hidden">
+        {/* Chat panel */}
+        <div className={`flex flex-col ${showLyrics ? 'w-1/2 border-r border-border' : 'flex-1'} h-full transition-all`}>
+          {/* Top bar */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
+            <div className="flex items-center gap-2">
+              {!user && (
+                <>
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-accent to-accent2 flex items-center justify-center">
+                    <Disc3 size={14} className="text-white" />
+                  </div>
+                  <span className="text-sm font-semibold text-white">Song On Call</span>
+                </>
+              )}
+              {user && (
+                <span className="text-sm text-muted truncate">
+                  {activeThread?.title || 'Select or start a conversation'}
+                </span>
+              )}
+            </div>
+            {!user && (
+              <button onClick={() => openAuthModal()} className="text-xs bg-accent/10 hover:bg-accent/20 border border-accent/20 text-accent px-3 py-1.5 rounded-lg transition-all font-medium">
+                Sign in
+              </button>
+            )}
+          </div>
+
+
+          {activeThreadId
+            ? <ChatBox threadId={activeThreadId} onLyrics={handleLyrics} onStageChange={handleStageChange} />
+            : (
+              <div className="flex-1 flex items-center justify-center">
+                <Disc3 size={32} className="text-muted opacity-30 animate-spin" style={{ animationDuration: '3s' }} />
+              </div>
+            )
+          }
+        </div>
+
+        {/* Right panel: Lyrics + Player/Progress */}
+        {showLyrics && (
+          <div className="w-1/2 flex flex-col h-full overflow-hidden">
+            <div className={showPlayer || showProgress ? 'flex-1 overflow-hidden' : 'h-full'}>
+              <LyricsPanel
+                threadId={activeThread?.id || anonThreadId}
+                lyrics={currentLyrics}
+                stage={stage}
+                onGenerate={handleGenerate}
+                onRevised={handleRevised}
+                onApprove={handleApprove}
+                approving={approving}
+                approveError={approveError}
+                onStyleSelect={handleStyleSelect}
+              />
+            </div>
+            {(showProgress || showPlayer) && (
+              <div className="border-t border-border p-4 flex-shrink-0 space-y-4 bg-surface/50">
+                {showProgress && <GenerationProgress />}
+                {showPlayer   && <Player song={currentSong} />}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {showAuthModal && <AuthModal />}
+    </div>
+  )
+}
+
+export default function Root() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
+  )
+}

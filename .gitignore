@@ -1,0 +1,43 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Database
+songs.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Generated audio files
+jobs/
+
+# Logs
+*.log
+server.log
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.cache/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

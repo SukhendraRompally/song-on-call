@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #root { height: 100%; }
+  body {
+    background-color: #0A0A0F;
+    color: #F9FAFB;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #0A0A0F; }
+  ::-webkit-scrollbar-thumb { background: #2A2A3A; border-radius: 2px; }
+}
+
+/* Landing waveform animations — each themed differently */
+@keyframes waveBar {
+  0%   { transform: scaleY(0.2); }
+  100% { transform: scaleY(1); }
+}
+/* Wedding: slow, stately waltz */
+@keyframes waveWedding {
+  0%   { transform: scaleY(0.6); }
+  50%  { transform: scaleY(1); }
+  100% { transform: scaleY(0.65); }
+}
+/* Pet: gentle, small ripples */
+@keyframes wavePet {
+  0%   { transform: scaleY(0.5); }
+  100% { transform: scaleY(0.85); }
+}
+/* Long distance: intense peaks then silence */
+@keyframes waveLongDistance {
+  0%   { transform: scaleY(0.2); }
+  30%  { transform: scaleY(1); }
+  60%  { transform: scaleY(0.15); }
+  100% { transform: scaleY(0.9); }
+}
+/* Parents: rapid, chaotic, joyful */
+@keyframes waveParents {
+  0%   { transform: scaleY(0.3); }
+  25%  { transform: scaleY(1); }
+  50%  { transform: scaleY(0.4); }
+  75%  { transform: scaleY(0.9); }
+  100% { transform: scaleY(0.5); }
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  .gradient-text {
+    background: linear-gradient(135deg, #7C3AED, #4F46E5, #06B6D4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .glow { box-shadow: 0 0 24px rgba(124, 58, 237, 0.3); }
+  .glow-sm { box-shadow: 0 0 12px rgba(124, 58, 237, 0.2); }
+}
