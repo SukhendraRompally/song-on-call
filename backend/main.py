@@ -58,6 +58,7 @@ app.add_middleware(
 class AuthRequest(BaseModel):
     email: str
     password: str
+    anon_thread_id: Optional[str] = None
 
 class ChatRequest(BaseModel):
     thread_id: str
@@ -79,15 +80,33 @@ class UpdateThreadRequest(BaseModel):
 
 # ── Auth routes ───────────────────────────────────────────────────────────────
 
+def _claim_anon_thread(anon_thread_id: str | None, user_id: str, db: Session) -> None:
+    """Transfer an anonymous thread (and its songs) to a real user after signup/login."""
+    if not anon_thread_id:
+        return
+    thread = db.query(Thread).filter(
+        Thread.id == anon_thread_id,
+        Thread.user_id == "anon",
+    ).first()
+    if not thread:
+        return
+    thread.user_id = user_id
+    # Claim any songs on that thread too
+    db.query(Song).filter(Song.thread_id == anon_thread_id).update({"user_id": user_id})
+    db.commit()
+
+
 @app.post("/auth/signup")
 async def auth_signup(req: AuthRequest, db: Session = Depends(get_db)):
     user, token = signup(req.email, req.password, db)
+    _claim_anon_thread(req.anon_thread_id, user.id, db)
     return {"user_id": user.id, "email": user.email, "token": token, "email_verified": user.email_verified}
 
 
 @app.post("/auth/login")
 async def auth_login(req: AuthRequest, db: Session = Depends(get_db)):
     user, token = login(req.email, req.password, db)
+    _claim_anon_thread(req.anon_thread_id, user.id, db)
     return {"user_id": user.id, "email": user.email, "token": token, "email_verified": user.email_verified}
 
 
@@ -359,12 +378,13 @@ async def _run_generation(thread_id: str, user_id: str) -> None:
 
         generation_status[thread_id] = {"status": "generating", "message": "Composing your song with Lyria..."}
 
-        # Build style prompt — convert artist if present
-        # Use style locked in during style_gathering, fall back to auto-generated
+        # Use style locked in during style_gathering, fall back to safe generic
         if thread.music_style:
             style = thread.music_style
+        elif thread.chat_history:
+            style = build_wondera_prompt(thread.chat_history, thread.reference_song)
         else:
-            style = build_wondera_prompt(thread.chat_history or [], thread.reference_song)
+            style = "acoustic pop, heartfelt vocals, gentle guitar, warm and emotional"
 
         # Destination
         user_jobs = JOBS_DIR / user_id

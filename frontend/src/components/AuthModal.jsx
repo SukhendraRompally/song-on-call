@@ -3,7 +3,7 @@ import { X, Music, Mail, Lock, Loader2 } from 'lucide-react'
 import { auth } from '../lib/api'
 import useStore from '../store/useStore'
 
-export default function AuthModal() {
+export default function AuthModal({ anonThreadId }) {
   const { closeAuthModal, setUser, setToken, authPendingAction } = useStore()
   const [mode, setMode] = useState('signup') // signup | login
   const [email, setEmail] = useState('')
@@ -17,10 +17,10 @@ export default function AuthModal() {
     setLoading(true)
     try {
       const res = mode === 'signup'
-        ? await auth.signup(email, password)
-        : await auth.login(email, password)
+        ? await auth.signup(email, password, anonThreadId)
+        : await auth.login(email, password, anonThreadId)
       setToken(res.data.token)
-      setUser({ id: res.data.user_id, email: res.data.email })
+      setUser({ id: res.data.user_id, email: res.data.email, email_verified: res.data.email_verified })
       closeAuthModal()
       if (authPendingAction) authPendingAction()
     } catch (err) {

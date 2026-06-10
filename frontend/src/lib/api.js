@@ -11,10 +11,10 @@ api.interceptors.request.use((config) => {
 })
 
 export const auth = {
-  signup: (email, password) => api.post('/auth/signup', { email, password }),
-  login:  (email, password) => api.post('/auth/login',  { email, password }),
-  me:     ()                => api.get('/auth/me'),
-  verify: (token)           => api.get(`/auth/verify?token=${token}`),
+  signup: (email, password, anonThreadId) => api.post('/auth/signup', { email, password, anon_thread_id: anonThreadId || null }),
+  login:  (email, password, anonThreadId) => api.post('/auth/login',  { email, password, anon_thread_id: anonThreadId || null }),
+  me:     ()                              => api.get('/auth/me'),
+  verify: (token)                         => api.get(`/auth/verify?token=${token}`),
 }
 
 export const threads = {

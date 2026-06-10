@@ -56,7 +56,10 @@ function App() {
 
   useEffect(() => {
     if (user) {
-      threadsApi.list().then(r => setThreads(r.data)).catch(console.error)
+      // Small delay so claim_anon_thread has time to commit before listing
+      setTimeout(() => {
+        threadsApi.list().then(r => setThreads(r.data)).catch(console.error)
+      }, 500)
     }
   }, [user])
 
@@ -257,7 +260,7 @@ function App() {
   if (showLanding) {
     return (
       <div className="h-screen bg-base overflow-hidden">
-        {showAuthModal && <AuthModal />}
+        {showAuthModal && <AuthModal anonThreadId={anonThreadId} />}
         <LandingPage onStart={() => {
           // scroll chat into view — just focus the input
           document.querySelector('textarea')?.focus()
@@ -342,7 +345,7 @@ function App() {
         )}
       </div>
 
-      {showAuthModal && <AuthModal />}
+      {showAuthModal && <AuthModal anonThreadId={anonThreadId} />}
     </div>
   )
 }
