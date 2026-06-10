@@ -8,7 +8,7 @@ import GenerationProgress from './components/GenerationProgress'
 import AuthModal from './components/AuthModal'
 import useStore from './store/useStore'
 import { auth, threads as threadsApi, songs as songsApi, anon, chat } from './lib/api'
-import { Disc3, Sparkles } from 'lucide-react'
+import { Disc3, Sparkles, Menu, X as XIcon, MessageSquare, FileText } from 'lucide-react'
 import LandingPage from './components/LandingPage'
 
 const queryClient = new QueryClient()
@@ -27,6 +27,8 @@ function App() {
   const [stage, setStage] = useState('gathering')
   const [anonThreadId, setAnonThreadId] = useState(null)
   const [pollInterval, setPollInterval] = useState(null)
+  const [mobileTab, setMobileTab] = useState('chat')   // 'chat' | 'lyrics'
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [verifyState, setVerifyState] = useState(null) // null | 'verifying' | 'success' | 'error'
 
   // Handle email verification link: /verify?token=xxx
@@ -273,7 +275,7 @@ function App() {
 
   return (
     <div className="flex h-screen bg-base overflow-hidden">
-      {user && <Sidebar onSelectThread={handleSelectThread} onNewThread={handleNewThread} />}
+      {user && <div className="hidden md:flex h-full"><Sidebar onSelectThread={handleSelectThread} onNewThread={handleNewThread} /></div>}
       {user && !user.email_verified && (
         <div className="absolute top-0 left-0 right-0 z-50 bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-center justify-center gap-2 text-xs text-amber-400">
           <span>📧</span>
@@ -281,12 +283,50 @@ function App() {
         </div>
       )}
 
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && user && (
+        <div className="fixed inset-0 z-40 flex md:hidden">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setSidebarOpen(false)} />
+          <div className="relative z-10 w-72 h-full bg-surface border-r border-border">
+            <Sidebar onSelectThread={(id) => { handleSelectThread(id); setSidebarOpen(false) }} onNewThread={() => { handleNewThread(); setSidebarOpen(false) }} />
+          </div>
+        </div>
+      )}
+
+      {/* Mobile tab bar when lyrics are visible */}
+      {showLyrics && (
+        <div className="flex md:hidden border-b border-border flex-shrink-0">
+          <button
+            onClick={() => setMobileTab('chat')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${mobileTab === 'chat' ? 'text-white border-b-2 border-accent' : 'text-muted'}`}
+          >
+            <MessageSquare size={14} /> Chat
+          </button>
+          <button
+            onClick={() => setMobileTab('lyrics')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors ${mobileTab === 'lyrics' ? 'text-white border-b-2 border-accent' : 'text-muted'}`}
+          >
+            <FileText size={14} /> Lyrics & Song
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 flex overflow-hidden">
-        {/* Chat panel */}
-        <div className={`flex flex-col ${showLyrics ? 'w-1/2 border-r border-border' : 'flex-1'} h-full transition-all`}>
+        {/* Chat panel — full width on mobile, half on desktop when lyrics visible */}
+        <div className={`flex flex-col h-full transition-all
+          ${showLyrics
+            ? `md:w-1/2 md:border-r md:border-border ${mobileTab === 'chat' ? 'flex-1' : 'hidden md:flex'}`
+            : 'flex-1'
+          }`}>
           {/* Top bar */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
             <div className="flex items-center gap-2">
+              {/* Mobile hamburger for sidebar */}
+              {user && (
+                <button onClick={() => setSidebarOpen(true)} className="md:hidden mr-1 text-muted hover:text-white">
+                  <Menu size={20} />
+                </button>
+              )}
               {!user && (
                 <>
                   <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-accent to-accent2 flex items-center justify-center">
@@ -296,8 +336,8 @@ function App() {
                 </>
               )}
               {user && (
-                <span className="text-sm text-muted truncate">
-                  {activeThread?.title || 'Select or start a conversation'}
+                <span className="text-sm text-muted truncate max-w-[180px]">
+                  {activeThread?.title || 'New Song'}
                 </span>
               )}
             </div>
@@ -308,9 +348,8 @@ function App() {
             )}
           </div>
 
-
           {activeThreadId
-            ? <ChatBox threadId={activeThreadId} onLyrics={handleLyrics} onStageChange={handleStageChange} />
+            ? <ChatBox threadId={activeThreadId} onLyrics={(l) => { handleLyrics(l); setMobileTab('lyrics') }} onStageChange={handleStageChange} />
             : (
               <div className="flex-1 flex items-center justify-center">
                 <Disc3 size={32} className="text-muted opacity-30 animate-spin" style={{ animationDuration: '3s' }} />
@@ -319,9 +358,12 @@ function App() {
           }
         </div>
 
-        {/* Right panel: Lyrics + Player/Progress */}
+        {/* Right panel — full width on mobile (tab-switched), half on desktop */}
         {showLyrics && (
-          <div className="w-1/2 flex flex-col h-full overflow-hidden">
+          <div className={`flex flex-col h-full overflow-hidden
+            md:w-1/2
+            ${mobileTab === 'lyrics' ? 'flex-1' : 'hidden md:flex'}
+          `}>
             <div className={showPlayer || showProgress ? 'flex-1 overflow-hidden' : 'h-full'}>
               <LyricsPanel
                 threadId={activeThread?.id || anonThreadId}

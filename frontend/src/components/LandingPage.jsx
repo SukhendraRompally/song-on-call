@@ -175,7 +175,7 @@ export default function LandingPage({ onStart }) {
             </div>
           </div>
 
-          <h1 className="text-[3.5rem] font-black text-white leading-[1.05] tracking-tight mb-5 max-w-2xl mx-auto">
+          <h1 className="text-[2.4rem] md:text-[3.5rem] font-black text-white leading-[1.05] tracking-tight mb-5 max-w-2xl mx-auto">
             Your story deserves<br />
             <span style={{
               background: 'linear-gradient(135deg, #F59E0B 0%, #EC4899 40%, #7C3AED 80%)',
@@ -222,7 +222,7 @@ export default function LandingPage({ onStart }) {
       {/* How it works */}
       <section className="flex-shrink-0 px-8 py-16 border-t" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
         <p className="text-center text-xs text-white/25 uppercase tracking-widest font-semibold mb-12">How it works</p>
-        <div className="grid grid-cols-3 gap-5 max-w-3xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-3xl mx-auto">
           {steps.map((step, i) => (
             <div key={i}
               className={`relative rounded-2xl p-5 border border-white/8 bg-gradient-to-b ${step.color} ${step.border} transition-all duration-300 cursor-default`}
@@ -238,7 +238,7 @@ export default function LandingPage({ onStart }) {
 
               {/* Connector arrow */}
               {i < steps.length - 1 && (
-                <div className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 text-white/20">
+                <div className="hidden md:block absolute -right-3 top-1/2 -translate-y-1/2 z-10 text-white/20">
                   <ArrowRight size={14} />
                 </div>
               )}
@@ -254,7 +254,7 @@ export default function LandingPage({ onStart }) {
           Songs for the stories only you know
         </h2>
 
-        <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
           {examples.map((ex, i) => (
             <div
               key={i}

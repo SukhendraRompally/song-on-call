@@ -73,15 +73,24 @@ def generate_song(
     # Check for safety filter blocks
     if response.prompt_feedback and response.prompt_feedback.block_reason:
         raise RuntimeError(
-            f"Content blocked by safety filter: {response.prompt_feedback.block_reason.name}. "
-            "The lyrics may contain content that Lyria cannot process."
+            f"Content blocked by safety filter: {response.prompt_feedback.block_reason.name}."
         )
 
     if not response.candidates:
-        raise RuntimeError("Lyria returned no candidates (content may be blocked)")
+        raise RuntimeError("Lyria returned no candidates — content may have been blocked.")
+
+    candidate = response.candidates[0]
+
+    # Candidate-level finish reason check (catches SAFETY blocks that bypass prompt_feedback)
+    finish_reason = getattr(candidate, "finish_reason", None)
+    if finish_reason and str(finish_reason) not in ("FinishReason.STOP", "STOP", "1"):
+        raise RuntimeError(
+            f"Lyria declined to generate audio (finish_reason={finish_reason}). "
+            "Try adjusting the lyrics or style."
+        )
 
     mp3_bytes = None
-    parts = response.candidates[0].content.parts if response.candidates[0].content else []
+    parts = candidate.content.parts if candidate.content else []
     for part in parts:
         if hasattr(part, "inline_data") and part.inline_data is not None:
             mp3_bytes = part.inline_data.data
