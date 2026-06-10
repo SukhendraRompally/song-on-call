@@ -1,11 +1,13 @@
 """
-Authentication: signup, login, JWT, rate limiting.
+Authentication: signup, login, JWT, rate limiting, email verification.
 5 songs per user per day.
 """
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import resend
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
@@ -13,6 +15,10 @@ import bcrypt as _bcrypt
 from sqlalchemy.orm import Session
 
 from db import User, get_db, new_id, now
+
+resend.api_key = os.environ.get("RESEND_API_KEY", "")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
+FROM_EMAIL = os.environ.get("FROM_EMAIL", "Song On Call <noreply@aidgraph.com>")
 
 SECRET_KEY = os.environ.get("JWT_SECRET")
 if not SECRET_KEY:
@@ -113,20 +119,47 @@ def increment_song_count(user: User, db: Session) -> None:
 
 # ── Signup / Login ────────────────────────────────────────────────────────────
 
+def send_verification_email(email: str, token: str) -> None:
+    link = f"{FRONTEND_URL}/verify?token={token}"
+    resend.Emails.send({
+        "from": FROM_EMAIL,
+        "to": email,
+        "subject": "Verify your Song On Call account",
+        "html": f"""
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#08080E;color:#f9fafb;border-radius:16px;">
+          <h1 style="font-size:24px;font-weight:800;margin-bottom:8px;">Almost there 🎵</h1>
+          <p style="color:#9ca3af;margin-bottom:24px;">Click the button below to verify your email and start turning your stories into songs.</p>
+          <a href="{link}" style="display:inline-block;background:linear-gradient(135deg,#F59E0B,#EC4899,#7C3AED);color:white;font-weight:700;padding:14px 28px;border-radius:12px;text-decoration:none;font-size:15px;">
+            Verify my email
+          </a>
+          <p style="color:#6b7280;font-size:12px;margin-top:24px;">Or copy this link:<br/><span style="color:#a78bfa;">{link}</span></p>
+          <p style="color:#6b7280;font-size:11px;margin-top:16px;">This link expires in 24 hours. If you didn't sign up, ignore this email.</p>
+        </div>
+        """,
+    })
+
+
 def signup(email: str, password: str, db: Session) -> tuple[User, str]:
     if len(password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     existing = db.query(User).filter(User.email == email.lower()).first()
     if existing:
         raise HTTPException(status_code=409, detail="Email already registered")
+    verification_token = secrets.token_urlsafe(32)
     user = User(
         id=new_id(),
         email=email.lower(),
         password_hash=hash_password(password),
+        email_verified=False,
+        verification_token=verification_token,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
+    try:
+        send_verification_email(email.lower(), verification_token)
+    except Exception:
+        pass  # don't block signup if email fails
     token = create_token(user.id)
     return user, token
 

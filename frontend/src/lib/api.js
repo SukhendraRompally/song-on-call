@@ -14,6 +14,7 @@ export const auth = {
   signup: (email, password) => api.post('/auth/signup', { email, password }),
   login:  (email, password) => api.post('/auth/login',  { email, password }),
   me:     ()                => api.get('/auth/me'),
+  verify: (token)           => api.get(`/auth/verify?token=${token}`),
 }
 
 export const threads = {

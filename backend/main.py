@@ -82,19 +82,31 @@ class UpdateThreadRequest(BaseModel):
 @app.post("/auth/signup")
 async def auth_signup(req: AuthRequest, db: Session = Depends(get_db)):
     user, token = signup(req.email, req.password, db)
-    return {"user_id": user.id, "email": user.email, "token": token}
+    return {"user_id": user.id, "email": user.email, "token": token, "email_verified": user.email_verified}
 
 
 @app.post("/auth/login")
 async def auth_login(req: AuthRequest, db: Session = Depends(get_db)):
     user, token = login(req.email, req.password, db)
-    return {"user_id": user.id, "email": user.email, "token": token}
+    return {"user_id": user.id, "email": user.email, "token": token, "email_verified": user.email_verified}
+
+
+@app.get("/auth/verify")
+async def auth_verify(token: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.verification_token == token).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+    user.email_verified = True
+    user.verification_token = None
+    db.commit()
+    return {"message": "Email verified successfully"}
 
 
 @app.get("/auth/me")
 async def auth_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return {
         "user_id": user.id,
+        "email_verified": user.email_verified,
         "email": user.email,
         "songs_today": user.songs_generated_today,
         "daily_limit": 5,
@@ -412,6 +424,9 @@ async def generate(
         raise HTTPException(status_code=400, detail="No lyrics to generate from")
     if thread.status == "generating":
         raise HTTPException(status_code=409, detail="Already generating")
+
+    if not user.email_verified:
+        raise HTTPException(status_code=403, detail="Please verify your email before generating songs. Check your inbox.")
 
     check_rate_limit(user, db)
 

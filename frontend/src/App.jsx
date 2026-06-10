@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import Sidebar from './components/Sidebar'
 import ChatBox from './components/ChatBox'
@@ -27,6 +27,23 @@ function App() {
   const [stage, setStage] = useState('gathering')
   const [anonThreadId, setAnonThreadId] = useState(null)
   const [pollInterval, setPollInterval] = useState(null)
+  const [verifyState, setVerifyState] = useState(null) // null | 'verifying' | 'success' | 'error'
+
+  // Handle email verification link: /verify?token=xxx
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const token = params.get('token')
+    if (!token) return
+    setVerifyState('verifying')
+    auth.verify(token)
+      .then(() => {
+        setVerifyState('success')
+        window.history.replaceState({}, '', '/')
+        // Refresh user so email_verified updates
+        auth.me().then(r => setUser(r.data)).catch(() => {})
+      })
+      .catch(() => setVerifyState('error'))
+  }, [])
 
   useEffect(() => {
     if (token && !user) {
@@ -201,6 +218,42 @@ function App() {
 
   const showLanding = !user && messages.length === 0
 
+  // Email verification screen
+  if (verifyState === 'verifying' || verifyState === 'success' || verifyState === 'error') {
+    return (
+      <div className="h-screen bg-base flex items-center justify-center">
+        <div className="text-center max-w-sm px-6">
+          {verifyState === 'verifying' && (
+            <>
+              <div className="w-12 h-12 rounded-full border-2 border-accent border-t-transparent animate-spin mx-auto mb-4" />
+              <p className="text-white font-semibold">Verifying your email…</p>
+            </>
+          )}
+          {verifyState === 'success' && (
+            <>
+              <div className="text-4xl mb-4">🎵</div>
+              <h2 className="text-white text-xl font-bold mb-2">You're verified!</h2>
+              <p className="text-muted text-sm mb-6">Your account is ready. Start turning your stories into songs.</p>
+              <button onClick={() => setVerifyState(null)} className="bg-gradient-to-r from-accent to-accent2 text-white font-semibold px-6 py-3 rounded-xl glow">
+                Open Song On Call
+              </button>
+            </>
+          )}
+          {verifyState === 'error' && (
+            <>
+              <div className="text-4xl mb-4">⚠️</div>
+              <h2 className="text-white text-xl font-bold mb-2">Link expired or invalid</h2>
+              <p className="text-muted text-sm mb-6">Try signing in — if your email is already verified you're good to go.</p>
+              <button onClick={() => setVerifyState(null)} className="bg-gradient-to-r from-accent to-accent2 text-white font-semibold px-6 py-3 rounded-xl">
+                Go to app
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   if (showLanding) {
     return (
       <div className="h-screen bg-base overflow-hidden">
@@ -218,6 +271,12 @@ function App() {
   return (
     <div className="flex h-screen bg-base overflow-hidden">
       {user && <Sidebar onSelectThread={handleSelectThread} onNewThread={handleNewThread} />}
+      {user && !user.email_verified && (
+        <div className="absolute top-0 left-0 right-0 z-50 bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-center justify-center gap-2 text-xs text-amber-400">
+          <span>📧</span>
+          <span>Check your inbox to verify your email — required before generating songs.</span>
+        </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Chat panel */}

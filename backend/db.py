@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import (
-    create_engine, Column, String, Integer, Text, DateTime, JSON, ForeignKey
+    create_engine, Column, String, Integer, Text, DateTime, JSON, ForeignKey, Boolean
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
@@ -43,6 +43,8 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     password_hash = Column(String, nullable=False)
     created_at = Column(DateTime, default=now)
+    email_verified = Column(Boolean, default=False)
+    verification_token = Column(String, nullable=True, index=True)
     songs_generated_today = Column(Integer, default=0)
     reset_at = Column(DateTime, nullable=True)
 
